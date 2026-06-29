@@ -15,9 +15,12 @@ st.markdown("""
 *   **Giai đoạn Kiểm định (2021-2023)**: Đánh giá chiến lược trên 5 cổ phiếu này, so sánh với các danh mục Benchmark như VN-INDEX, Mua & Giữ (Buy & Hold), và 1/N.
 """)
 
+st.sidebar.header("📂 Dữ liệu đầu vào")
+uploaded_file = st.sidebar.file_uploader("Tải lên file dữ liệu CSV (VD: HOSE_2020_2023.csv)", type=["csv"])
+
 @st.cache_data
-def load_and_preprocess_data():
-    df = pd.read_csv('HOSE_2020_2023.csv')
+def load_and_preprocess_data(file):
+    df = pd.read_csv(file)
     df['date'] = pd.to_datetime(df['date'], errors='coerce')
     df['ticker'] = df['ticker'].astype(str).str.upper()
     
@@ -150,102 +153,101 @@ def portfolio_metrics(returns_series, signals_series=None):
 
     return pd.Series(metrics)
 
-# Tải dữ liệu
-with st.spinner("Đang xử lý dữ liệu, vui lòng đợi..."):
-    try:
-        raw_stocks, raw_vnindex = load_and_preprocess_data()
-        processed_stocks = generate_signals(raw_stocks)
-        top_5, portfolio, avg_signal = backtest(processed_stocks, raw_vnindex)
-    except FileNotFoundError:
-        st.error("Không tìm thấy file 'HOSE_2020_2023.csv'. Hãy đảm bảo file dữ liệu nằm cùng thư mục với mã nguồn.")
-        st.stop()
-    except Exception as e:
-        st.error(f"Đã xảy ra lỗi: {e}")
-        st.stop()
+if uploaded_file is None:
+    st.info("👋 Xin chào! Để bắt đầu, vui lòng tải lên file dữ liệu CSV (HOSE_2020_2023.csv) từ thanh công cụ bên trái (Sidebar).")
+else:
+    with st.spinner("Đang xử lý dữ liệu, vui lòng đợi..."):
+        try:
+            raw_stocks, raw_vnindex = load_and_preprocess_data(uploaded_file)
+            processed_stocks = generate_signals(raw_stocks)
+            top_5, portfolio, avg_signal = backtest(processed_stocks, raw_vnindex)
+        except Exception as e:
+            st.error(f"Đã xảy ra lỗi trong quá trình đọc hoặc xử lý dữ liệu: {e}")
+            st.stop()
 
-st.success("Xử lý dữ liệu hoàn tất!")
+    st.success("Xử lý dữ liệu hoàn tất!")
 
-# Hiển thị Top 5
-st.subheader("🏆 Top 5 Cổ Phiếu Dựa Trên Huấn Luyện (2020)")
-st.info(f"Các mã được chọn: **{', '.join(top_5)}**")
+    # Hiển thị Top 5
+    st.subheader("🏆 Top 5 Cổ Phiếu Dựa Trên Huấn Luyện (2020)")
+    st.info(f"Các mã được chọn: **{', '.join(top_5)}**")
 
-# Biểu đồ hiệu suất
-st.subheader("📈 Hiệu suất Tích lũy (Cumulative Returns) 2021-2023")
+    # Biểu đồ hiệu suất
+    st.subheader("📈 Hiệu suất Tích lũy (Cumulative Returns) 2021-2023")
 
-portfolio['Cum_Strategy'] = (1 + portfolio['Strategy_Return']).cumprod()
-portfolio['Cum_BH'] = (1 + portfolio['BH_Return']).cumprod()
-portfolio['Cum_VNINDEX'] = (1 + portfolio['VNINDEX_Return']).cumprod()
-portfolio['Cum_1N'] = (1 + portfolio['1N_Return']).cumprod()
+    portfolio['Cum_Strategy'] = (1 + portfolio['Strategy_Return']).cumprod()
+    portfolio['Cum_BH'] = (1 + portfolio['BH_Return']).cumprod()
+    portfolio['Cum_VNINDEX'] = (1 + portfolio['VNINDEX_Return']).cumprod()
+    portfolio['Cum_1N'] = (1 + portfolio['1N_Return']).cumprod()
 
-fig = go.Figure()
-fig.add_trace(go.Scatter(x=portfolio.index, y=portfolio['Cum_Strategy'], mode='lines', name='Chiến lược (RSI+MACD)'))
-fig.add_trace(go.Scatter(x=portfolio.index, y=portfolio['Cum_BH'], mode='lines', name='Mua & Giữ (Top 5)'))
-fig.add_trace(go.Scatter(x=portfolio.index, y=portfolio['Cum_VNINDEX'], mode='lines', name='VN-INDEX'))
-fig.add_trace(go.Scatter(x=portfolio.index, y=portfolio['Cum_1N'], mode='lines', name='1/N HOSE'))
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=portfolio.index, y=portfolio['Cum_Strategy'], mode='lines', name='Chiến lược (RSI+MACD)'))
+    fig.add_trace(go.Scatter(x=portfolio.index, y=portfolio['Cum_BH'], mode='lines', name='Mua & Giữ (Top 5)'))
+    fig.add_trace(go.Scatter(x=portfolio.index, y=portfolio['Cum_VNINDEX'], mode='lines', name='VN-INDEX'))
+    fig.add_trace(go.Scatter(x=portfolio.index, y=portfolio['Cum_1N'], mode='lines', name='1/N HOSE'))
 
-fig.update_layout(
-    title="So sánh Lợi nhuận Tích lũy Chiến lược vs Các Benchmark",
-    xaxis_title="Thời gian",
-    yaxis_title="Lợi nhuận tích lũy",
-    template="plotly_white",
-    hovermode="x unified"
-)
-st.plotly_chart(fig, use_container_width=True)
+    fig.update_layout(
+        title="So sánh Lợi nhuận Tích lũy Chiến lược vs Các Benchmark",
+        xaxis_title="Thời gian",
+        yaxis_title="Lợi nhuận tích lũy",
+        template="plotly_white",
+        hovermode="x unified"
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
-# Bảng 1: Phân tích hiệu quả toàn giai đoạn
-st.subheader("📊 BẢNG 1: Phân tích Hiệu quả và Rủi ro Danh mục (2021-2023)")
-df_metrics = pd.DataFrame({
-    '1. Tối ưu RSI+MACD': portfolio_metrics(portfolio['Strategy_Return'], avg_signal),
-    '2. Buy & Hold (Top 5)': portfolio_metrics(portfolio['BH_Return']),
-    '3. Benchmark VNINDEX': portfolio_metrics(portfolio['VNINDEX_Return']),
-    '4. Benchmark 1/N HOSE': portfolio_metrics(portfolio['1N_Return'])
-}).T
+    # Bảng 1: Phân tích hiệu quả toàn giai đoạn
+    st.subheader("📊 BẢNG 1: Phân tích Hiệu quả và Rủi ro Danh mục (2021-2023)")
+    df_metrics = pd.DataFrame({
+        '1. Tối ưu RSI+MACD': portfolio_metrics(portfolio['Strategy_Return'], avg_signal),
+        '2. Buy & Hold (Top 5)': portfolio_metrics(portfolio['BH_Return']),
+        '3. Benchmark VNINDEX': portfolio_metrics(portfolio['VNINDEX_Return']),
+        '4. Benchmark 1/N HOSE': portfolio_metrics(portfolio['1N_Return'])
+    }).T
 
-st.dataframe(df_metrics.round(3).style.highlight_max(subset=['Return (%)', 'Sharpe Ratio', 'Win Rate (%)'], color='lightgreen'))
+    st.dataframe(df_metrics.round(3).style.highlight_max(subset=['Return (%)', 'Sharpe Ratio', 'Win Rate (%)'], color='lightgreen'))
 
-# Bảng 2: Kiểm định đa giai đoạn (Regime Testing)
-st.subheader("🔍 BẢNG 2: Kiểm định Đa Giai đoạn (Regime Testing)")
-regimes = {
-    '1. Giai đoạn tăng trưởng (Bull: 2021 - T3/2022)': ('2021-01-01', '2022-03-31'),
-    '2. Giai đoạn suy giảm (Bear: T4/2022 - T11/2022)': ('2022-04-01', '2022-11-15'),
-    '3. Giai đoạn phục hồi (Sideway: T12/2022 - 2023)': ('2022-11-16', '2023-12-31')
-}
+    # Bảng 2: Kiểm định đa giai đoạn (Regime Testing)
+    st.subheader("🔍 BẢNG 2: Kiểm định Đa Giai đoạn (Regime Testing)")
+    regimes = {
+        '1. Giai đoạn tăng trưởng (Bull: 2021 - T3/2022)': ('2021-01-01', '2022-03-31'),
+        '2. Giai đoạn suy giảm (Bear: T4/2022 - T11/2022)': ('2022-04-01', '2022-11-15'),
+        '3. Giai đoạn phục hồi (Sideway: T12/2022 - 2023)': ('2022-11-16', '2023-12-31')
+    }
 
-col1, col2, col3 = st.columns(3)
-cols = [col1, col2, col3]
+    col1, col2, col3 = st.columns(3)
+    cols = [col1, col2, col3]
 
-for i, (name, (start, end)) in enumerate(regimes.items()):
-    with cols[i]:
-        st.markdown(f"**{name}**")
-        port_regime = portfolio.loc[start:end]
-        if not port_regime.empty:
-            regime_metrics = pd.DataFrame({
-                'Tối ưu RSI+MACD': portfolio_metrics(port_regime['Strategy_Return']),
-                'Buy & Hold Top 5': portfolio_metrics(port_regime['BH_Return']),
-                'VNINDEX': portfolio_metrics(port_regime['VNINDEX_Return'])
-            }).loc[['Return (%)', 'Max Drawdown (%)', 'Sharpe Ratio']]
-            st.dataframe(regime_metrics.round(3))
+    for i, (name, (start, end)) in enumerate(regimes.items()):
+        with cols[i]:
+            st.markdown(f"**{name}**")
+            port_regime = portfolio.loc[start:end]
+            if not port_regime.empty:
+                regime_metrics = pd.DataFrame({
+                    'Tối ưu RSI+MACD': portfolio_metrics(port_regime['Strategy_Return']),
+                    'Buy & Hold Top 5': portfolio_metrics(port_regime['BH_Return']),
+                    'VNINDEX': portfolio_metrics(port_regime['VNINDEX_Return'])
+                }).loc[['Return (%)', 'Max Drawdown (%)', 'Sharpe Ratio']]
+                st.dataframe(regime_metrics.round(3))
 
-# Bảng 3: Walk-Forward Out-of-sample
-st.subheader("🚀 BẢNG 3: Kiểm định Độ tin cậy Walk-Forward (Out-of-Sample)")
-st.markdown("Đánh giá hiệu suất trượt cửa sổ từng năm độc lập trên danh mục Top 5:")
+    # Bảng 3: Walk-Forward Out-of-sample
+    st.subheader("🚀 BẢNG 3: Kiểm định Độ tin cậy Walk-Forward (Out-of-Sample)")
+    st.markdown("Đánh giá hiệu suất trượt cửa sổ từng năm độc lập trên danh mục Top 5:")
 
-walk_forward_results = []
-for year in [2021, 2022, 2023]:
-    year_data = portfolio[portfolio.index.year == year]
-    if not year_data.empty:
-        strat_ret = (1 + year_data['Strategy_Return']).prod() - 1
-        bh_ret = (1 + year_data['BH_Return']).prod() - 1
-        vn_ret = (1 + year_data['VNINDEX_Return']).prod() - 1
-        status = "✅ VƯỢT TRỘI" if strat_ret > vn_ret else "❌ THẤP HƠN"
-        
-        walk_forward_results.append({
-            "Năm": year,
-            "Lợi nhuận Chiến lược (%)": round(strat_ret * 100, 2),
-            "Lợi nhuận Mua & Giữ (%)": round(bh_ret * 100, 2),
-            "Lợi nhuận VN-INDEX (%)": round(vn_ret * 100, 2),
-            "Đánh giá vs VN-INDEX": status
-        })
+    walk_forward_results = []
+    for year in [2021, 2022, 2023]:
+        year_data = portfolio[portfolio.index.year == year]
+        if not year_data.empty:
+            strat_ret = (1 + year_data['Strategy_Return']).prod() - 1
+            bh_ret = (1 + year_data['BH_Return']).prod() - 1
+            vn_ret = (1 + year_data['VNINDEX_Return']).prod() - 1
+            status = "✅ VƯỢT TRỘI" if strat_ret > vn_ret else "❌ THẤP HƠN"
+            
+            walk_forward_results.append({
+                "Năm": year,
+                "Lợi nhuận Chiến lược (%)": round(strat_ret * 100, 2),
+                "Lợi nhuận Mua & Giữ (%)": round(bh_ret * 100, 2),
+                "Lợi nhuận VN-INDEX (%)": round(vn_ret * 100, 2),
+                "Đánh giá vs VN-INDEX": status
+            })
 
-if walk_forward_results:
-    st.table(pd.DataFrame(walk_forward_results))
+    if walk_forward_results:
+        st.table(pd.DataFrame(walk_forward_results))
